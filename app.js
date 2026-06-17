@@ -594,9 +594,7 @@ async function generatePDF() {
     iframe.style.transform = 'none';
     await new Promise(r => requestAnimationFrame(r));
 
-    // Scale to ~150dpi at final print size:
-    // printScale converts natural px to 24×36in at 96dpi;
-    // × (150/96) converts that to 150dpi.
+    // Target 150dpi at final print size.
     const canvasScale = printScale * (150 / 96);
 
     const canvas = await html2canvas(iframeDoc.body, {
@@ -612,7 +610,16 @@ async function generatePDF() {
       scrollX: 0,
       scrollY: 0,
       logging: false,
-      imageTimeout: 15000
+      imageTimeout: 15000,
+      onclone: (_doc) => {
+        // html2canvas bug: certain CSS letter-spacing values cause it to drop
+        // the width of word-separator spaces, making words run together in the
+        // output ("COVIDcollapsein", "recoveryandrecord").
+        // Setting a tiny non-zero letter-spacing forces it to preserve spaces.
+        const fix = _doc.createElement('style');
+        fix.textContent = 'html * { letter-spacing: 0.001px !important; word-spacing: normal !important; }';
+        _doc.head.appendChild(fix);
+      }
     });
 
     // Restore preview scaling
