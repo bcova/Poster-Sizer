@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poster Sizer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <svg class="app-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="2" width="13" height="20" rx="1.5" stroke="#4a9eff" stroke-width="1.8" fill="none"/>
+        <rect x="8" y="2" width="13" height="20" rx="1.5" stroke="#4a9eff" stroke-width="1.8" fill="#1a1b1e" opacity="0.7"/>
+        <line x1="11" y1="7" x2="18" y2="7" stroke="#4a9eff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="11" y1="11" x2="18" y2="11" stroke="#4a9eff" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+        <line x1="11" y1="15" x2="15" y2="15" stroke="#4a9eff" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+      </svg>
+      <h1 class="app-title">Poster Sizer</h1>
+    </div>
+    <div class="toolbar-center">
+      <span class="file-name" id="file-name">No file loaded</span>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary" id="btn-upload">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v8M4 4l3-3 3 3M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Upload File
+      </button>
+      <label class="toggle-wrap" id="edit-toggle-wrap" title="Click elements to edit text and CSS properties">
+        <input type="checkbox" id="toggle-edit" disabled>
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+        <span class="toggle-label-text">Edit Mode</span>
+      </label>
+      <button class="btn btn-primary" id="btn-print" disabled title="Best results in Chrome or Edge">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="2" y="4" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <path d="M4 4V2a1 1 0 011-1h4a1 1 0 011 1v2" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="4" y="8" width="6" height="4" rx=".5" fill="currentColor" opacity=".5"/>
+          <circle cx="10.5" cy="6" r=".75" fill="currentColor"/>
+        </svg>
+        Print / Save PDF
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace" id="workspace">
+    <!-- Empty state -->
+    <div class="empty-state" id="empty-state">
+      <div class="drop-zone-inner">
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="6" width="26" height="40" rx="3" stroke="#4a9eff" stroke-width="2" fill="none" opacity="0.4"/>
+          <rect x="18" y="6" width="26" height="40" rx="3" stroke="#4a9eff" stroke-width="2" fill="none"/>
+          <line x1="24" y1="18" x2="36" y2="18" stroke="#4a9eff" stroke-width="2" stroke-linecap="round"/>
+          <line x1="24" y1="25" x2="36" y2="25" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+          <line x1="24" y1="32" x2="30" y2="32" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+          <path d="M28 42v8M24 46l4-4 4 4" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+        <p class="drop-title">Drop an HTML file here</p>
+        <p class="drop-sub">or click <strong>Upload File</strong> in the toolbar</p>
+        <p class="drop-note">Supports any HTML file — sizing is auto-detected and scaled to 24×36in</p>
+      </div>
+    </div>
+
+    <!-- Preview panel (shown after file load) -->
+    <div class="preview-panel hidden" id="preview-panel">
+      <div class="preview-scroll">
+        <div class="poster-viewport" id="poster-viewport">
+          <iframe
+            id="poster-frame"
+            sandbox="allow-same-origin allow-scripts allow-modals"
+            title="Poster preview"
+          ></iframe>
+        </div>
+        <div class="scale-indicator" id="scale-indicator"></div>
+      </div>
+    </div>
+
+    <!-- CSS Properties Panel -->
+    <div class="props-panel hidden" id="props-panel">
+      <div class="props-header">
+        <span class="props-breadcrumb" id="props-breadcrumb">—</span>
+        <button class="props-close" id="props-close" title="Close panel">✕</button>
+      </div>
+      <div class="props-body">
+        <div class="prop-row">
+          <label class="prop-label">Font Size</label>
+          <div class="prop-control prop-size-row">
+            <input type="number" class="prop-input prop-num" id="prop-font-size" min="1" max="999" placeholder="—">
+            <select class="prop-select prop-unit" id="prop-font-size-unit">
+              <option value="px">px</option>
+              <option value="em">em</option>
+              <option value="rem">rem</option>
+              <option value="pt">pt</option>
+            </select>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Color</label>
+          <div class="prop-control prop-color-row">
+            <input type="color" class="prop-color" id="prop-color">
+            <input type="text" class="prop-input prop-hex" id="prop-color-hex" placeholder="#000000" maxlength="7">
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Background</label>
+          <div class="prop-control prop-color-row">
+            <input type="color" class="prop-color" id="prop-bg-color">
+            <input type="text" class="prop-input prop-hex" id="prop-bg-color-hex" placeholder="#ffffff" maxlength="7">
+            <button class="prop-clear-btn" id="prop-bg-clear" title="Clear background">✕</button>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Font Weight</label>
+          <div class="prop-control">
+            <select class="prop-select prop-full" id="prop-font-weight">
+              <option value="">— inherit —</option>
+              <option value="300">Light (300)</option>
+              <option value="400">Normal (400)</option>
+              <option value="500">Medium (500)</option>
+              <option value="600">SemiBold (600)</option>
+              <option value="700">Bold (700)</option>
+              <option value="800">ExtraBold (800)</option>
+              <option value="900">Black (900)</option>
+            </select>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Text Align</label>
+          <div class="prop-control prop-align-row">
+            <button class="prop-align-btn" data-align="left" title="Left">
+              <svg width="14" height="12" viewBox="0 0 14 12"><line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="6" x2="9" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="10" x2="11" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="prop-align-btn" data-align="center" title="Center">
+              <svg width="14" height="12" viewBox="0 0 14 12"><line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="prop-align-btn" data-align="right" title="Right">
+              <svg width="14" height="12" viewBox="0 0 14 12"><line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="5" y1="6" x2="13" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="prop-align-btn" data-align="justify" title="Justify">
+              <svg width="14" height="12" viewBox="0 0 14 12"><line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Padding</label>
+          <div class="prop-control prop-size-row">
+            <input type="number" class="prop-input prop-num" id="prop-padding" min="0" max="999" placeholder="—">
+            <span class="prop-unit-static">px</span>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label class="prop-label">Line Height</label>
+          <div class="prop-control prop-size-row">
+            <input type="number" class="prop-input prop-num" id="prop-line-height" min="0.5" max="10" step="0.1" placeholder="—">
+            <span class="prop-unit-static">×</span>
+          </div>
+        </div>
+      </div>
+      <div class="props-footer">
+        <button class="btn btn-danger-sm" id="btn-reset-element">Reset Element</button>
+      </div>
+    </div>
+  </main>
+
+  <input type="file" id="file-input" accept=".html,.htm" hidden>
+  <script src="app.js"></script>
+</body>
+</html>
