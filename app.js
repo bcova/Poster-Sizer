@@ -7,7 +7,6 @@ const state = {
   naturalW: 0,
   naturalH: 0,
   printScale: 1,
-  previewScale: 1,
   editMode: false,
   selectedEl: null,
   panelApplied: {}, // prop → original inline value
@@ -206,58 +205,48 @@ function applyScale() {
 
   const { naturalW, naturalH } = state;
 
-  // Fit-to-contain: no cropping, no distortion
-  const scaleX = POSTER_W_PX / naturalW;
-  const scaleY = POSTER_H_PX / naturalH;
-  state.printScale = Math.min(scaleX, scaleY);
+  // Fit-to-contain scale for printing
+  state.printScale = Math.min(POSTER_W_PX / naturalW, POSTER_H_PX / naturalH);
 
-  // Viewport: how many px per inch to display the poster-viewport div
-  const pad = 48; // px padding from edges
+  // Size the poster-viewport div (px per inch × 24in wide, 36in tall)
+  const pad = 48;
   const availW = workspace.clientWidth - (propsPanel.classList.contains('hidden') ? 0 : 230) - pad * 2;
   const availH = workspace.clientHeight - pad * 2;
-  const vpScaleX = availW / 24;
-  const vpScaleY = availH / 36;
-  const vpScale  = Math.min(vpScaleX, vpScaleY);
+  const vpScale = Math.min(availW / 24, availH / 36); // px per inch
 
   posterVP.style.setProperty('--viewport-scale', vpScale + 'px');
 
-  // previewScale: how much to shrink content to fill the iframe display box
-  const displayW = 24 * vpScale; // pixels of the poster-viewport div on screen
-  state.previewScale = displayW / naturalW;
+  // Set the iframe to the content's natural pixel dimensions, then scale the
+  // iframe element itself in the parent page so it fits the poster-viewport.
+  // This avoids any in-document transform/clip issues — the iframe renders at
+  // full resolution and the parent CSS scales it down cleanly.
+  const displayW = 24 * vpScale; // visual width of poster-viewport in screen px
+  const previewScale = displayW / naturalW;
 
-  injectScaleStyles();
+  iframe.style.width     = naturalW + 'px';
+  iframe.style.height    = naturalH + 'px';
+  iframe.style.transform = `scale(${previewScale})`;
+
+  injectPrintStyles();
   updateScaleIndicator();
 }
 
-function injectScaleStyles() {
+function injectPrintStyles() {
   const doc = iframe.contentDocument;
   if (!doc) return;
 
-  const { naturalW, naturalH, printScale, previewScale } = state;
+  const { naturalW, naturalH, printScale } = state;
 
-  // Remove any previously injected style
   const old = doc.getElementById('poster-sizer-scale');
   if (old) old.remove();
 
   const style = doc.createElement('style');
   style.id = 'poster-sizer-scale';
+  // Only print styles are injected — screen display is handled by the parent
+  // page scaling the iframe element itself (no in-document transforms needed).
   style.textContent = `
-/* === Poster Sizer Injected Styles === */
-@media screen {
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: ${naturalW}px !important;
-    height: ${naturalH}px !important;
-    overflow: hidden !important;
-  }
-  body {
-    transform-origin: 0 0;
-    transform: scale(${previewScale});
-  }
-}
+/* === Poster Sizer Print Styles === */
 @media print {
-  /* zoom affects layout dimensions (unlike transform), so Chrome paginates correctly */
   html {
     zoom: ${printScale.toFixed(6)};
     width: ${naturalW}px !important;
@@ -278,10 +267,6 @@ function injectScaleStyles() {
 }
 `;
   doc.head.appendChild(style);
-
-  // Resize iframe back to the display size
-  iframe.style.width  = '';
-  iframe.style.height = '';
 }
 
 function updateScaleIndicator() {
