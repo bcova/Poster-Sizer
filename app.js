@@ -141,20 +141,28 @@ async function measureAndScale() {
   const widthMatch   = viewportMeta?.content?.match(/width=(\d+)/);
   const intendedW    = widthMatch ? parseInt(widthMatch[1]) : null;
 
-  // Step 2: size iframe to intended (or large) width for accurate measurement
+  // Step 2: inject a temporary style that forces height:auto so content using
+  // height:100vh or height:100% doesn't inflate to match the iframe height
+  const measureStyle = doc.createElement('style');
+  measureStyle.id = 'poster-sizer-measure';
+  measureStyle.textContent = `
+    html, body {
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+  `;
+  doc.head.appendChild(measureStyle);
+
   const measureW = intendedW || 1920;
   iframe.style.width  = measureW + 'px';
-  iframe.style.height = '10000px';
-
-  // Step 3: temporarily remove overflow:hidden that suppresses scrollWidth
-  const savedHtmlOverflow = html.style.overflow;
-  const savedBodyOverflow = body.style.overflow;
-  html.style.overflow = 'visible';
-  body.style.overflow = 'visible';
+  // Use a square reference; body height is auto so iframe height doesn't matter
+  iframe.style.height = measureW + 'px';
 
   await raf2();
 
-  // Step 4: measure
+  // Step 3: measure
   let w = Math.max(
     body.scrollWidth  || 0,
     body.offsetWidth  || 0,
@@ -178,9 +186,8 @@ async function measureAndScale() {
     h = rect.height || Math.round(w * (36 / 24));
   }
 
-  // Restore overflow
-  html.style.overflow = savedHtmlOverflow;
-  body.style.overflow = savedBodyOverflow;
+  // Remove measurement helper
+  measureStyle.remove();
 
   state.naturalW = w;
   state.naturalH = h;
@@ -232,28 +239,33 @@ function injectScaleStyles() {
   style.id = 'poster-sizer-scale';
   style.textContent = `
 /* === Poster Sizer Injected Styles === */
-html, body {
-  margin: 0 !important;
-  padding: 0 !important;
-  width: ${naturalW}px !important;
-  height: ${naturalH}px !important;
-}
 @media screen {
-  body {
-    transform-origin: 0 0;
-    transform: scale(${previewScale});
-    overflow: hidden;
-  }
-}
-@media print {
   html, body {
+    margin: 0 !important;
+    padding: 0 !important;
     width: ${naturalW}px !important;
     height: ${naturalH}px !important;
     overflow: hidden !important;
   }
   body {
     transform-origin: 0 0;
-    transform: scale(${printScale}) !important;
+    transform: scale(${previewScale});
+  }
+}
+@media print {
+  /* zoom affects layout dimensions (unlike transform), so Chrome paginates correctly */
+  html {
+    zoom: ${printScale.toFixed(6)};
+    width: ${naturalW}px !important;
+    height: ${naturalH}px !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 }
 @page {
