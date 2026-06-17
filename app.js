@@ -572,18 +572,24 @@ function triggerPrint() {
     .map(el => el.outerHTML)
     .join('\n');
 
-  // Clone body without edit-mode markers
+  // Clone body without edit-mode markers; preserve body inline styles (often
+  // hold background-color in Claude-generated posters).
   const tempBody = doc.body.cloneNode(true);
   tempBody.querySelectorAll('[data-poster-editable]').forEach(el => {
     el.removeAttribute('contenteditable');
     el.removeAttribute('data-poster-editable');
   });
+  tempBody.classList.remove('edit-mode');
   const bodyHTML = tempBody.innerHTML;
+  const bodyStyle = doc.body.getAttribute('style') || '';
 
-  // Build a standalone print document where html/body are exactly 24×36in.
-  // Content sits in a scaled wrapper so it fills the page at print resolution.
-  // print-color-adjust forces all backgrounds/colors to render without the
-  // user needing to manually enable "Background graphics" in the print dialog.
+  // Center content horizontally within the 24in page (content may be narrower).
+  const POSTER_W_CSS = 24 * 96; // 2304 px
+  const centerLeft = Math.max(0, Math.round((POSTER_W_CSS - naturalW * printScale) / 2));
+
+  // Build a standalone print document. The user clicks the "Print" button
+  // in the popup themselves, which ensures fonts/images are fully loaded
+  // before print() is triggered (avoids the timing race that strips backgrounds).
   const printHTML = `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 ${headParts}
@@ -608,14 +614,48 @@ html, body {
   overflow: hidden;
   position: absolute;
   top: 0;
-  left: 0;
+  left: ${centerLeft}px;
 }
+#_bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(26,27,30,0.96);
+  color: #e8e9ed;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 99999;
+  box-shadow: 0 -2px 16px rgba(0,0,0,0.5);
+}
+#_bar strong { color: #4a9eff; }
+#_bar-btn {
+  margin-left: auto;
+  background: #4a9eff;
+  color: #fff;
+  border: none;
+  padding: 9px 20px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#_bar-btn:hover { background: #3a8eef; }
+@media print { #_bar { display: none !important; } }
 @page { size: 24in 36in; margin: 0; }
 </style>
-</head><body><div id="_pw">${bodyHTML}</div></body></html>`;
+</head><body>
+<div id="_pw"${bodyStyle ? ` style="${bodyStyle}"` : ''}>${bodyHTML}</div>
+<div id="_bar">
+  <span>Poster preview — when the print dialog opens, set <strong>Destination → Save as PDF</strong>. Paper size auto-sets to <strong>24 × 36 in</strong>.</span>
+  <button id="_bar-btn" onclick="window.print()">Print / Save PDF</button>
+</div>
+</body></html>`;
 
-  // Use a blob URL so the load event fires reliably and external fonts/scripts
-  // have time to finish before print() is called.
   const blob = new Blob([printHTML], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const pw = window.open(url, '_blank');
@@ -624,17 +664,7 @@ html, body {
     alert('Popup blocked — please allow popups for this page and try again.');
     return;
   }
-
-  let printed = false;
-  const doPrint = () => {
-    if (printed || pw.closed) return;
-    printed = true;
-    pw.focus();
-    pw.print();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  };
-  pw.addEventListener('load', () => setTimeout(doPrint, 1000));
-  setTimeout(doPrint, 5000); // Fallback if load never fires
+  setTimeout(() => URL.revokeObjectURL(url), 600000);
 }
 
 // ── Helpers ────────────────────────────────────────────
