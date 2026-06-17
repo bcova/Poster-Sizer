@@ -141,8 +141,7 @@ async function measureAndScale() {
   const widthMatch   = viewportMeta?.content?.match(/width=(\d+)/);
   const intendedW    = widthMatch ? parseInt(widthMatch[1]) : null;
 
-  // Step 2: inject a temporary style that forces height:auto so content using
-  // height:100vh or height:100% doesn't inflate to match the iframe height
+  // Inject measurement helper: height:auto prevents 100vh from inflating measurements
   const measureStyle = doc.createElement('style');
   measureStyle.id = 'poster-sizer-measure';
   measureStyle.textContent = `
@@ -155,20 +154,24 @@ async function measureAndScale() {
   `;
   doc.head.appendChild(measureStyle);
 
-  const measureW = intendedW || 1920;
-  iframe.style.width  = measureW + 'px';
-  // Use a square reference; body height is auto so iframe height doesn't matter
-  iframe.style.height = measureW + 'px';
+  // PASS 1: render at a narrow width (100px) so that content with fixed/max-width
+  // constraints overflows the iframe → body.scrollWidth = the content's natural width
+  // (e.g. a max-width:660px wrapper gives scrollWidth=660, not the iframe width).
+  // Fluid content (width:100% everywhere) gives scrollWidth≈100 → falls back to 1200.
+  iframe.style.width  = '100px';
+  iframe.style.height = '3000px';
 
   await raf2();
 
-  // Step 3: measure
-  let w = Math.max(
-    body.scrollWidth  || 0,
-    body.offsetWidth  || 0,
-    html.scrollWidth  || 0,
-    html.offsetWidth  || 0
-  );
+  const minContentW = Math.max(body.scrollWidth || 0, html.scrollWidth || 0);
+  let w = intendedW || (minContentW > 320 ? minContentW : 1200);
+
+  // PASS 2: render at the detected content width to measure the natural height
+  iframe.style.width  = w + 'px';
+  iframe.style.height = '3000px';
+
+  await raf2();
+
   let h = Math.max(
     body.scrollHeight  || 0,
     body.offsetHeight  || 0,
@@ -176,15 +179,7 @@ async function measureAndScale() {
     html.offsetHeight  || 0
   );
 
-  // Fallback chain
-  if (w < 10) {
-    const rect = html.getBoundingClientRect();
-    w = rect.width || intendedW || 1920;
-  }
-  if (h < 10) {
-    const rect = html.getBoundingClientRect();
-    h = rect.height || Math.round(w * (36 / 24));
-  }
+  if (h < 10) h = Math.round(w * (36 / 24));
 
   // Remove measurement helper
   measureStyle.remove();
