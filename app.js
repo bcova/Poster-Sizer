@@ -582,17 +582,23 @@ function triggerPrint() {
 
   // Build a standalone print document where html/body are exactly 24×36in.
   // Content sits in a scaled wrapper so it fills the page at print resolution.
+  // print-color-adjust forces all backgrounds/colors to render without the
+  // user needing to manually enable "Background graphics" in the print dialog.
   const printHTML = `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 ${headParts}
 <style>
+*, *::before, *::after {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}
 html, body {
   margin: 0 !important;
   padding: 0 !important;
   width: 24in !important;
   height: 36in !important;
   overflow: hidden !important;
-  background: white !important;
 }
 #_pw {
   transform-origin: 0 0;
@@ -608,17 +614,27 @@ html, body {
 </style>
 </head><body><div id="_pw">${bodyHTML}</div></body></html>`;
 
-  const pw = window.open('', '_blank');
+  // Use a blob URL so the load event fires reliably and external fonts/scripts
+  // have time to finish before print() is called.
+  const blob = new Blob([printHTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const pw = window.open(url, '_blank');
   if (!pw) {
+    URL.revokeObjectURL(url);
     alert('Popup blocked — please allow popups for this page and try again.');
     return;
   }
-  pw.document.open();
-  pw.document.write(printHTML);
-  pw.document.close();
-  pw.addEventListener('load', () => {
-    setTimeout(() => { pw.focus(); pw.print(); }, 500);
-  });
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed || pw.closed) return;
+    printed = true;
+    pw.focus();
+    pw.print();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  pw.addEventListener('load', () => setTimeout(doPrint, 1000));
+  setTimeout(doPrint, 5000); // Fallback if load never fires
 }
 
 // ── Helpers ────────────────────────────────────────────
