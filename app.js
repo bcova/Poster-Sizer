@@ -557,121 +557,92 @@ btnReset.addEventListener('click', () => {
   openPropsPanel(el);
 });
 
-// ── Print ──────────────────────────────────────────────
-btnPrint.addEventListener('click', triggerPrint);
+// ── PDF Download ───────────────────────────────────────
+btnPrint.addEventListener('click', generatePDF);
 
-function triggerPrint() {
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function generatePDF() {
   if (!state.htmlSource) return;
 
-  const doc = iframe.contentDocument;
-  const { naturalW, naturalH, printScale } = state;
+  const origHTML = btnPrint.innerHTML;
+  btnPrint.disabled = true;
+  btnPrint.textContent = 'Generating PDF…';
 
-  // Collect head tags, excluding injected poster-sizer styles
-  const headParts = Array.from(doc.head.children)
-    .filter(el => !['poster-sizer-scale', 'poster-sizer-edit', 'poster-sizer-measure'].includes(el.id))
-    .map(el => el.outerHTML)
-    .join('\n');
+  // Temporarily disable edit mode so outlines don't appear in the PDF
+  const wasEditMode = state.editMode;
+  if (wasEditMode) setEditMode(false);
 
-  // Clone body without edit-mode markers; preserve body inline styles (often
-  // hold background-color in Claude-generated posters).
-  const tempBody = doc.body.cloneNode(true);
-  tempBody.querySelectorAll('[data-poster-editable]').forEach(el => {
-    el.removeAttribute('contenteditable');
-    el.removeAttribute('data-poster-editable');
-  });
-  tempBody.classList.remove('edit-mode');
-  const bodyHTML = tempBody.innerHTML;
-  const bodyStyle = doc.body.getAttribute('style') || '';
+  try {
+    await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
 
-  // Center content horizontally within the 24in page (content may be narrower).
-  // With CSS zoom, the zoomed layout width is naturalW * printScale.
-  const POSTER_W_CSS = 24 * 96; // 2304 px
-  const centerLeft = Math.max(0, Math.round((POSTER_W_CSS - naturalW * printScale) / 2));
+    const { naturalW, naturalH, printScale } = state;
+    const iframeDoc = iframe.contentDocument;
 
-  // Build a standalone print document. The user clicks the "Print" button
-  // in the popup themselves, which ensures fonts/images are fully loaded
-  // before print() is triggered (avoids the timing race that strips backgrounds).
-  //
-  // IMPORTANT: we use CSS `zoom` (not `transform: scale`) on #_pw.
-  // `transform` is a visual-only effect — Chrome's PDF renderer measures
-  // layout dimensions, not painted dimensions, so a transformed div still
-  // renders at its original layout size in the PDF.
-  // `zoom` actually changes the layout box, so Chrome sees the zoomed size.
-  const printHTML = `<!DOCTYPE html><html><head>
-<meta charset="utf-8">
-${headParts}
-<style>
-*, *::before, *::after {
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-  color-adjust: exact !important;
-}
-html, body {
-  margin: 0 !important;
-  padding: 0 !important;
-  width: 24in !important;
-  height: 36in !important;
-  overflow: hidden !important;
-}
-#_pw {
-  zoom: ${printScale.toFixed(6)};
-  width: ${naturalW}px;
-  height: ${naturalH}px;
-  overflow: hidden;
-  position: absolute;
-  top: 0;
-  left: ${centerLeft}px;
-}
-#_bar {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  background: rgba(26,27,30,0.96);
-  color: #e8e9ed;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 13px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  z-index: 99999;
-  box-shadow: 0 -2px 16px rgba(0,0,0,0.5);
-}
-#_bar strong { color: #4a9eff; }
-#_bar-btn {
-  margin-left: auto;
-  background: #4a9eff;
-  color: #fff;
-  border: none;
-  padding: 9px 20px;
-  border-radius: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-#_bar-btn:hover { background: #3a8eef; }
-@media print { #_bar { display: none !important; } }
-@page { size: 24in 36in; margin: 0; }
-</style>
-</head><body>
-<div id="_pw"${bodyStyle ? ` style="${bodyStyle}"` : ''}>${bodyHTML}</div>
-<div id="_bar">
-  <span>Poster preview — when the print dialog opens, set <strong>Destination → Save as PDF</strong>. Paper size auto-sets to <strong>24 × 36 in</strong>.</span>
-  <button id="_bar-btn" onclick="window.print()">Print / Save PDF</button>
-</div>
-</body></html>`;
+    // Remove preview transform so html2canvas captures the content at
+    // its natural layout size (the transform is visual-only anyway).
+    iframe.style.transform = 'none';
+    await new Promise(r => requestAnimationFrame(r));
 
-  const blob = new Blob([printHTML], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const pw = window.open(url, '_blank');
-  if (!pw) {
-    URL.revokeObjectURL(url);
-    alert('Popup blocked — please allow popups for this page and try again.');
-    return;
+    // Scale to ~150dpi at final print size:
+    // printScale converts natural px to 24×36in at 96dpi;
+    // × (150/96) converts that to 150dpi.
+    const canvasScale = printScale * (150 / 96);
+
+    const canvas = await html2canvas(iframeDoc.body, {
+      scale: canvasScale,
+      useCORS: true,
+      allowTaint: true,
+      width: naturalW,
+      height: naturalH,
+      windowWidth: naturalW,
+      windowHeight: naturalH,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      logging: false,
+      imageTimeout: 15000
+    });
+
+    // Restore preview scaling
+    applyScale();
+
+    // Content dimensions in inches at print scale
+    const contentW = (naturalW * printScale) / 96;
+    const contentH = (naturalH * printScale) / 96;
+    // Center on the 24×36in page
+    const offsetX = Math.max(0, (24 - contentW) / 2);
+    const offsetY = Math.max(0, (36 - contentH) / 2);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [24, 36] });
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', offsetX, offsetY, contentW, contentH);
+
+    const name = (state.fileName || 'poster').replace(/\.[^.]+$/, '');
+    pdf.save(`${name}-24x36.pdf`);
+
+  } catch (err) {
+    console.error('PDF generation failed:', err);
+    alert('PDF generation failed — check your internet connection and try again.\n\n' + err.message);
+    applyScale();
+  } finally {
+    btnPrint.disabled = false;
+    btnPrint.innerHTML = origHTML;
+    if (wasEditMode) setEditMode(true);
   }
-  setTimeout(() => URL.revokeObjectURL(url), 600000);
 }
+
 
 // ── Helpers ────────────────────────────────────────────
 function rgbToHex(rgb) {
