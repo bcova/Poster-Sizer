@@ -584,12 +584,19 @@ function triggerPrint() {
   const bodyStyle = doc.body.getAttribute('style') || '';
 
   // Center content horizontally within the 24in page (content may be narrower).
+  // With CSS zoom, the zoomed layout width is naturalW * printScale.
   const POSTER_W_CSS = 24 * 96; // 2304 px
   const centerLeft = Math.max(0, Math.round((POSTER_W_CSS - naturalW * printScale) / 2));
 
   // Build a standalone print document. The user clicks the "Print" button
   // in the popup themselves, which ensures fonts/images are fully loaded
   // before print() is triggered (avoids the timing race that strips backgrounds).
+  //
+  // IMPORTANT: we use CSS `zoom` (not `transform: scale`) on #_pw.
+  // `transform` is a visual-only effect — Chrome's PDF renderer measures
+  // layout dimensions, not painted dimensions, so a transformed div still
+  // renders at its original layout size in the PDF.
+  // `zoom` actually changes the layout box, so Chrome sees the zoomed size.
   const printHTML = `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 ${headParts}
@@ -607,8 +614,7 @@ html, body {
   overflow: hidden !important;
 }
 #_pw {
-  transform-origin: 0 0;
-  transform: scale(${printScale.toFixed(8)});
+  zoom: ${printScale.toFixed(6)};
   width: ${naturalW}px;
   height: ${naturalH}px;
   overflow: hidden;
