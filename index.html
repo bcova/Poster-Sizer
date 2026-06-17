@@ -76,6 +76,17 @@
           ></iframe>
         </div>
         <div class="scale-indicator" id="scale-indicator"></div>
+        <div class="source-controls hidden" id="source-controls">
+          <span class="source-controls-label">Source size (px):</span>
+          <label class="source-field">
+            W <input type="number" id="inp-source-w" class="source-inp" min="100" max="9999" step="1" title="Content width in pixels — edit to override auto-detection">
+          </label>
+          <span class="source-sep">×</span>
+          <label class="source-field">
+            H <input type="number" id="inp-source-h" class="source-inp" min="100" max="9999" step="1" title="Content height in pixels — edit to override auto-detection">
+          </label>
+          <button class="btn btn-secondary btn-sm" id="btn-refit" title="Re-detect source dimensions from the HTML">Re-detect</button>
+        </div>
       </div>
     </div>
 

@@ -29,6 +29,10 @@ const propsPanel    = document.getElementById('props-panel');
 const propsBreadcrumb = document.getElementById('props-breadcrumb');
 const propsClose    = document.getElementById('props-close');
 const btnReset      = document.getElementById('btn-reset-element');
+const sourceControls = document.getElementById('source-controls');
+const inpSourceW    = document.getElementById('inp-source-w');
+const inpSourceH    = document.getElementById('inp-source-h');
+const btnRefit      = document.getElementById('btn-refit');
 
 // CSS prop inputs
 const propFontSize     = document.getElementById('prop-font-size');
@@ -88,11 +92,11 @@ function handleFile(file) {
 
 // ── Iframe Loading ─────────────────────────────────────
 function loadIntoFrame(htmlString) {
-  // Reset edit mode state
   state.editMode = false;
   toggleEdit.checked = false;
   toggleEdit.disabled = true;
   btnPrint.disabled = true;
+  sourceControls.classList.add('hidden');
   closePropsPanel();
 
   iframe.srcdoc = htmlString;
@@ -186,6 +190,11 @@ async function measureAndScale() {
 
   state.naturalW = w;
   state.naturalH = h;
+
+  // Show source dimension controls and populate with detected values
+  sourceControls.classList.remove('hidden');
+  inpSourceW.value = w;
+  inpSourceH.value = h;
 
   applyScale();
 }
@@ -281,6 +290,24 @@ function updateScaleIndicator() {
   scaleInd.textContent =
     `Print scale: ${printScale.toFixed(2)}× (${scalePct}%) · Source: ${naturalW}×${naturalH}px → 24×36 in`;
 }
+
+// ── Source Dimension Overrides ────────────────────────
+function applySourceDims() {
+  const w = parseInt(inpSourceW.value);
+  const h = parseInt(inpSourceH.value);
+  if (w >= 100 && h >= 100) {
+    state.naturalW = w;
+    state.naturalH = h;
+    applyScale();
+  }
+}
+
+inpSourceW.addEventListener('change', applySourceDims);
+inpSourceH.addEventListener('change', applySourceDims);
+
+btnRefit.addEventListener('click', async () => {
+  if (state.htmlSource) await measureAndScale();
+});
 
 // ── Window Resize ──────────────────────────────────────
 let resizeTimer;
