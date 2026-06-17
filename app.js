@@ -563,23 +563,62 @@ btnPrint.addEventListener('click', triggerPrint);
 function triggerPrint() {
   if (!state.htmlSource) return;
 
-  // Try printing from the iframe's window directly
-  try {
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-  } catch (e) {
-    // Fallback: serialize and print in a new window
-    const doc = iframe.contentDocument;
-    const serialized = '<!DOCTYPE html>' + doc.documentElement.outerHTML;
-    const pw = window.open('', '_blank', 'width=800,height=600');
-    pw.document.open();
-    pw.document.write(serialized);
-    pw.document.close();
-    pw.addEventListener('load', () => {
-      pw.focus();
-      pw.print();
-    });
+  const doc = iframe.contentDocument;
+  const { naturalW, naturalH, printScale } = state;
+
+  // Collect head tags, excluding injected poster-sizer styles
+  const headParts = Array.from(doc.head.children)
+    .filter(el => !['poster-sizer-scale', 'poster-sizer-edit', 'poster-sizer-measure'].includes(el.id))
+    .map(el => el.outerHTML)
+    .join('\n');
+
+  // Clone body without edit-mode markers
+  const tempBody = doc.body.cloneNode(true);
+  tempBody.querySelectorAll('[data-poster-editable]').forEach(el => {
+    el.removeAttribute('contenteditable');
+    el.removeAttribute('data-poster-editable');
+  });
+  const bodyHTML = tempBody.innerHTML;
+
+  // Build a standalone print document where html/body are exactly 24×36in.
+  // Content sits in a scaled wrapper so it fills the page at print resolution.
+  const printHTML = `<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+${headParts}
+<style>
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 24in !important;
+  height: 36in !important;
+  overflow: hidden !important;
+  background: white !important;
+}
+#_pw {
+  transform-origin: 0 0;
+  transform: scale(${printScale.toFixed(8)});
+  width: ${naturalW}px;
+  height: ${naturalH}px;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+@page { size: 24in 36in; margin: 0; }
+</style>
+</head><body><div id="_pw">${bodyHTML}</div></body></html>`;
+
+  const pw = window.open('', '_blank');
+  if (!pw) {
+    alert('Popup blocked — please allow popups for this page and try again.');
+    return;
   }
+  pw.document.open();
+  pw.document.write(printHTML);
+  pw.document.close();
+  pw.addEventListener('load', () => {
+    setTimeout(() => { pw.focus(); pw.print(); }, 500);
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────
